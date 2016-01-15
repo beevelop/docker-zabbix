@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -ea # Exit on Error and Export all vars
+
+[[ -n $DEBUG_ENTRYPOINT ]] && set -x
+
+. ./conf.env
+
+while ! nc -z $DB_HOST 3306; do
+    echo "Waiting for MySQL database..."
+    sleep 2
+done
+
+confile=/opt/conf/zabbix_server.conf
+if [ ! -e $confile ]; then
+    mkdir -p /opt/conf/
+
+    cd zabbix/database/mysql
+    mysql -h$DB_HOST -u$DB_USER -p$DB_PASS $DB_NAME < schema.sql
+    mysql -h$DB_HOST -u$DB_USER -p$DB_PASS $DB_NAME < images.sql
+    mysql -h$DB_HOST -u$DB_USER -p$DB_PASS $DB_NAME < data.sql
+
+    cd /opt/
+fi
+
+envsubst < zabbix_server.conf.tpl > $confile
+
+zabbix_server -c $confile
+tail -f /tmp/zabbix_server.log
